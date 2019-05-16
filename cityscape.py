@@ -10,9 +10,9 @@ from PIL import Image
 from collections import namedtuple
 import Cityscape.labels as Labels
 
-CITYSCAPE_DIR = '/home/zhulifa/data/cityscape' # cofig your data path
-CITYSCAPE_IMG_DIR = os.path.join(CITYSCAPE_DIR, 'leftImg8bit_trainvaltest/leftImg8bit')
-CITYSCAPE_ANNO_DIR = os.path.join(CITYSCAPE_DIR, 'gtFine_trainvaltest/gtFine')
+CITYSCAPE_DIR = '/home/zhulifa/data/Cityscape' # cofig your data path
+CITYSCAPE_IMG_DIR = os.path.join(CITYSCAPE_DIR, 'leftImg8bit')
+CITYSCAPE_ANNO_DIR = os.path.join(CITYSCAPE_DIR, 'gtFine')
 
 types = ['train', 'val', 'test']
 

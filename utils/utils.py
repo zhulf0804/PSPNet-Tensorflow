@@ -5,8 +5,12 @@ from __future__ import division
 import cv2
 import numpy as np
 import sys
+import input_data
 sys.path.append("..")
 import Cityscape.labels as Labels
+
+
+# line 91 _IGNORE_LABEL NEEDED TO BE MODIFIED
 
 ANNO_TRAIN_FILE = '../Cityscape/anno_train.txt'
 
@@ -41,7 +45,7 @@ def cal_classes_weight():
                    0.80990625, 0.02802981, 0.3856194, 0.11109209, 0.36627791, 3.30425387, 0.06383219, \
                    1.66934974, 1.89835499, 1.91699846, 4.52550817, 1.07868993, 0.03445375]
     '''
-
+'''
 def cal_batch_mIoU(pred, gt, classes_num):
     """
 
@@ -64,6 +68,40 @@ def cal_batch_mIoU(pred, gt, classes_num):
         IoU_0.append(round(iou, 2))
 
     IoU_0 = dict(zip(CLASS_NAMES, IoU_0))
+    mIoU = np.mean(IoU)
+    return mIoU, IoU_0
+
+'''
+
+def cal_batch_mIoU(pred, gt, classes_num):
+    """
+
+    :param pred: [batch, height, width]
+    :param gt: [batch, height, width]
+    :param classes_num:
+    :return:
+    """
+    IoU_0 = []
+    IoU = []
+    eps = 1e-6
+
+    pred_flatten = np.reshape(pred, -1)
+    gt_flatten = np.reshape(gt, -1)
+
+    #print(pred_flatten.shape, gt_flatten.shape)
+
+    for i in range(0, classes_num):
+        a = [pred_flatten == i, gt_flatten != 255]
+        a = np.sum(np.all(a, 0))
+        b = np.sum(gt_flatten == i)
+        c = [pred_flatten == i, gt_flatten == i]
+        c = np.sum(np.all(c, 0))
+        iou = c / (a + b - c + eps)
+        if b != 0:
+            IoU.append(iou)
+        IoU_0.append(round(iou, 2))
+
+    IoU_0 = dict(zip(CLASS_NAMES[0:], IoU_0))
     mIoU = np.mean(IoU)
     return mIoU, IoU_0
 

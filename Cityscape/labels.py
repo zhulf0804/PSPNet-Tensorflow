@@ -106,7 +106,7 @@ labels = [
 
 # create a function mapping id to trainId:
 # id_to_trainId = {label.id: label.trainId for label in labels}
-id_to_trainId = {label.id: label.trainId if label.trainId != 255  else 19  for label in labels}
+id_to_trainId = {label.id: label.trainId for label in labels}
 id_to_trainId_map_func = np.vectorize(id_to_trainId.get)
 
 # trainId2Color

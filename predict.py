@@ -21,6 +21,8 @@ saved_prediction = './pred/'
 prediction_on = 'train' # 'train', 'val' or 'test'
 
 
+PRETRAINED_MODEL_PATH = PSPNet.PRETRAINED_MODEL_PATH
+
 cmap = Labels.trainId2Color
 cmap[19] = (0, 0, 0) # add ignore class color
 cmap[255] = (0, 0, 0)
@@ -44,7 +46,7 @@ with tf.name_scope("input"):
     x = tf.placeholder(tf.float32, [BATCH_SIZE, HEIGHT, WIDTH, 3], name='x_input')
     y = tf.placeholder(tf.int32, [BATCH_SIZE, HEIGHT, WIDTH], name='ground_truth')
 
-_, _, _, logits = PSPNet.PSPNet(x, True)
+_, logits = PSPNet.PSPNet(x, is_training=False, output_stride=8, pre_trained_model=PRETRAINED_MODEL_PATH)
 
 
 with tf.name_scope('prediction_and_miou'):
@@ -58,12 +60,12 @@ with tf.Session() as sess:
     sess.run(tf.global_variables_initializer())
     saver = tf.train.Saver()
 
-    saver.restore(sess, './checkpoint/pspnet.model-2000')
+    #saver.restore(sess, './checkpoint/pspnet.model-2000')
 
-    #ckpt = tf.train.get_checkpoint_state(saved_ckpt_path)
-    #if ckpt and ckpt.model_checkpoint_path:
-    #    saver.restore(sess, ckpt.model_checkpoint_path)
-    #    print("Model restored...")
+    ckpt = tf.train.get_checkpoint_state(saved_ckpt_path)
+    if ckpt and ckpt.model_checkpoint_path:
+        saver.restore(sess, ckpt.model_checkpoint_path)
+        print("Model restored...")
     print("predicting on %s set..." % prediction_on)
     coord = tf.train.Coordinator()
     threads = tf.train.start_queue_runners(sess=sess, coord=coord)
