@@ -10,13 +10,13 @@ from PIL import Image
 from collections import namedtuple
 import Cityscape.labels as Labels
 
-CITYSCAPE_DIR = '/Volumes/Samsung_T5/Cityscape' # cofig your data path
+CITYSCAPE_DIR = '/Users/zhulf/data/cityscape' # cofig your data path
 CITYSCAPE_IMG_DIR = os.path.join(CITYSCAPE_DIR, 'leftImg8bit')
 CITYSCAPE_ANNO_DIR = os.path.join(CITYSCAPE_DIR, 'gtFine')
 
 types = ['train', 'val', 'test']
 
-SAVED_DIR = CITYSCAPE_DIR
+SAVED_DIR = './Cityscape'
 SAVED_IMG_TRAIN_FILE = os.path.join(SAVED_DIR, 'img_train.txt')
 SAVED_IMG_VAL_FILE = os.path.join(SAVED_DIR, 'img_val.txt')
 SAVED_IMG_TEST_FILE = os.path.join(SAVED_DIR, 'img_test.txt')
@@ -37,7 +37,7 @@ def get_anno_file_list():
         length = 0
         for dir in dirs:
             CITYSCAPE_ANNO_DIR_type_dir = os.path.join(CITYSCAPE_ANNO_DIR_type, dir)
-            img_files_path = glob.glob(os.path.join(CITYSCAPE_ANNO_DIR_type_dir, '*_labelTrainIds.png'))
+            img_files_path = glob.glob(os.path.join(CITYSCAPE_ANNO_DIR_type_dir, '*_labelIds.png'))
             length += len(img_files_path)
             for img_file_path in img_files_path:
                 f.write(img_file_path + '\n')

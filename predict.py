@@ -8,24 +8,32 @@ import os
 from PIL import Image
 import matplotlib.pyplot as plt
 import model.pspnet as PSPNet
-import Cityscape.labels as Labels
 import input_data
 import utils.utils as Utils
 
-BATCH_SIZE = 1
-HEIGHT = 768
-WIDTH = 768
-CLASSES = PSPNet.CLASSES
-saved_ckpt_path = './checkpoint/'
-saved_prediction = './pred/'
-prediction_on = 'train' # 'train', 'val' or 'test'
+flags = tf.app.flags
+FLAGS = flags.FLAGS
+
+# for dataset
+flags.DEFINE_integer('height', 1024, 'The height of raw image.')
+flags.DEFINE_integer('width', 2048, 'The width of raw image.')
+flags.DEFINE_integer('batch_size', 1, 'Batch size.')
+flags.DEFINE_integer('classes', 19, 'The number of classes')
+flags.DEFINE_integer('ignore_label', 255, 'The ignore label value.')
 
 
-PRETRAINED_MODEL_PATH = PSPNet.PRETRAINED_MODEL_PATH
+# for checkpoint
+flags.DEFINE_string('pretrained_model_path', './resnet_v2_101_2017_04_14/resnet_v2_101.ckpt', 'Path to save pretrained model.')
+flags.DEFINE_string('saved_ckpt_path', './checkpoint/', 'Path to load training checkpoint.')
 
-cmap = Labels.trainId2Color
-cmap[19] = (0, 0, 0) # add ignore class color
-cmap[255] = (0, 0, 0)
+# for network configration
+flags.DEFINE_integer('output_stride', 8, 'output stride in the resnet model.')
+
+# for saved configration
+flags.DEFINE_enum('prediction_on', 'val', ['train', 'val', 'test'], 'Which dataset to predict.')
+flags.DEFINE_string('saved_prediction', './pred/', 'Path to save predictions.')
+
+cmap = input_data.label_colours
 
 def color_gray(image):
     height, width = image.shape
@@ -33,27 +41,26 @@ def color_gray(image):
     return_img = np.zeros([height, width, 3], np.uint8)
     for i in range(height):
         for j in range(width):
-            return_img[i, j, :] = cmap[image[i, j]]
+            if image[i, j] == FLAGS.ignore_label:
+                return_img[i, j, :] = (0, 0, 0)
+            else:
+                return_img[i, j, :] = cmap[image[i, j]]
 
     return return_img
 
-
-image_batch_0, image_batch, anno_batch, filename = input_data.read_batch(BATCH_SIZE, type=prediction_on)
-
+val_data = input_data.read_val_data()
 
 with tf.name_scope("input"):
 
-    x = tf.placeholder(tf.float32, [BATCH_SIZE, HEIGHT, WIDTH, 3], name='x_input')
-    y = tf.placeholder(tf.int32, [BATCH_SIZE, HEIGHT, WIDTH], name='ground_truth')
+    x = tf.placeholder(tf.float32, [FLAGS.batch_size, FLAGS.height, FLAGS.width, 3], name='x_input')
+    y = tf.placeholder(tf.int32, [FLAGS.batch_size, FLAGS.height, FLAGS.width], name='ground_truth')
 
-_, logits = PSPNet.PSPNet(x, is_training=False, output_stride=8, pre_trained_model=PRETRAINED_MODEL_PATH)
+_, logits = PSPNet.PSPNet(x, is_training=False, output_stride=FLAGS.output_stride, pre_trained_model=FLAGS.pretrained_model_path, classes=FLAGS.classes)
 
 
 with tf.name_scope('prediction_and_miou'):
 
     prediction = tf.argmax(logits, axis=-1, name='predictions')
-
-
 
 with tf.Session() as sess:
     sess.run(tf.local_variables_initializer())
@@ -62,22 +69,21 @@ with tf.Session() as sess:
 
     #saver.restore(sess, './checkpoint/pspnet.model-2000')
 
-    ckpt = tf.train.get_checkpoint_state(saved_ckpt_path)
+    ckpt = tf.train.get_checkpoint_state(FLAGS.saved_ckpt_path)
     if ckpt and ckpt.model_checkpoint_path:
         saver.restore(sess, ckpt.model_checkpoint_path)
         print("Model restored...")
-    print("predicting on %s set..." % prediction_on)
-    coord = tf.train.Coordinator()
-    threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+    print("predicting on %s set..." % FLAGS.prediction_on)
 
-    for i in range(2):
-        b_image_0, b_image, b_anno, b_filename = sess.run([image_batch_0, image_batch, anno_batch, filename])
+
+    for i in range(1):
+        b_image_0, b_image, b_anno, b_filename = val_data.next_batch(FLAGS.batch_size, is_training=False)
 
         pred = sess.run(prediction, feed_dict={x: b_image, y: b_anno})
 
         print(pred.shape, b_anno.shape)
 
-        mIoU_val, IoU_val = Utils.cal_batch_mIoU(pred, b_anno, CLASSES)
+        mIoU_val, IoU_val = Utils.cal_batch_mIoU(pred, b_anno, FLAGS.classes)
         # save raw image, annotation, and prediction
         pred = pred.astype(np.uint8)
         b_anno = b_anno.astype(np.uint8)
@@ -90,19 +96,14 @@ with tf.Session() as sess:
         anno = Image.fromarray(b_anno_color)
         pred = Image.fromarray(pred_color)
 
-        basename = b_filename[0].split('.')[0]
+        basename = b_filename.split('.')[0]
         #print(basename)
 
-        if not os.path.exists(saved_prediction):
-            os.mkdir(saved_prediction)
-        img.save(os.path.join(saved_prediction, basename + '.png'))
-        anno.save(os.path.join(saved_prediction, basename + '_anno.png'))
-        pred.save(os.path.join(saved_prediction, basename + '_pred.png'))
+        if not os.path.exists(FLAGS.saved_prediction):
+            os.mkdir(FLAGS.saved_prediction)
+        img.save(os.path.join(FLAGS.saved_prediction, basename + '.png'))
+        anno.save(os.path.join(FLAGS.saved_prediction, basename + '_anno.png'))
+        pred.save(os.path.join(FLAGS.saved_prediction, basename + '_pred.png'))
 
-        print("%s.png: prediction saved in %s, mIoU value is %.2f" % (basename, saved_prediction, mIoU_val))
+        print("%s.png: prediction saved in %s, mIoU value is %.2f" % (basename, FLAGS.saved_prediction, mIoU_val))
         print(IoU_val)
-
-
-    coord.request_stop()
-
-    coord.join(threads)

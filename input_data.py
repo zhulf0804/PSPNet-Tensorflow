@@ -1,208 +1,254 @@
 # coding=utf-8
 from __future__ import print_function
 from __future__ import division
+from __future__ import absolute_import
 
-import tensorflow as tf
-import numpy as np
 import os
-import math
-import sys
-from PIL import Image
-from random import choice
+import numpy as np
+from sklearn.utils import shuffle
 import cv2
 import random
 from random import choice
-import to_tfrecord as TFRecord
+import math
+import cityscape
 
-tfrecord_file = TFRecord.tfrecord_file
-_NUM_SHARDS = TFRecord._NUM_SHARDS
+HEIGHT = 768
+WIDTH = 768
+CHANNELS = 3
 
-def scale_image_anno(image, anno, scale):
+CLASSES = 19
 
-    image_shape = tf.shape(image)
-    new_dim = tf.cast(
-        tf.cast([image_shape[0], image_shape[1]], tf.float32) * scale,
-        tf.int32)
+_MIN_SCALE = 0.5
+_MAX_SCALE = 2.0
 
-    image = tf.squeeze(tf.image.resize_bilinear(
-        tf.expand_dims(image, 0),
-        new_dim,
-        align_corners=True), [0])
+SCALES = [0.5, 0.75, 1.0, 1.25, 1.5, 1.75, 2.0]
 
-    anno = tf.squeeze(tf.squeeze(tf.image.resize_nearest_neighbor(
-        tf.expand_dims(tf.expand_dims(anno, 0), 3),
-        new_dim,
-        align_corners=True), 3), 0)
+_IGNORE_LABEL = 255
 
+_R_MEAN = 72.39239876
+_G_MEAN = 82.90891754
+_B_MEAN = 73.15835921
+
+_MEAN_RGB = [_R_MEAN, _G_MEAN, _B_MEAN]
+
+
+CITYSCAPE_IMG_DIR = cityscape.CITYSCAPE_IMG_DIR
+CITYSCAPE_ANNO_DIR = cityscape.CITYSCAPE_ANNO_DIR
+
+# colour map
+label_colours = [(128, 64,128),  # 0=background
+                 # 1=aeroplane, 2=bicycle, 3=bird, 4=boat, 5=bottle
+                 (244, 35,232), (70, 70, 70), (102,102,156), (190,153,153), (153,153,153),
+                 # 6=bus, 7=car, 8=cat, 9=chair, 10=cow
+                 (250,170, 30), (220,220,  0), (107,142, 35), (152,251,152), (70,130,180),
+                 # 11=dining table, 12=dog, 13=horse, 14=motorbike, 15=person
+                 (220, 20, 60), (255,  0,  0), (0,  0,142), (0,  0, 70), (0, 60,100),
+                 # 16=potted plant, 17=sheep, 18=sofa, 19=train, 20=tv/monitor
+                 (0, 80,100), (0,  0,230), (119, 11, 32)]
+
+
+
+dataset = cityscape.CITYSCAPE_DIR # Select your path
+
+IMG_TRAIN_LIST = os.path.join(dataset, 'img_train.txt')
+IMG_VAL_LIST = os.path.join(dataset, 'img_val.txt')
+IMG_TEST_LIST = os.path.join(dataset, 'img_test.txt')
+
+ANNO_TRAIN_LIST = os.path.join(dataset, 'anno_train.txt')
+ANNO_VAL_LIST = os.path.join(dataset, 'anno_val.txt')
+ANNO_TEST_LIST = os.path.join(dataset, 'anno_test.txt')
+
+
+def flip_random_left_right(image, anno):
+    '''
+    :param image: [height, width, channel]
+    :return:
+    '''
+    flag = random.randint(0, 1)
+    if flag:
+        return cv2.flip(image, 1), cv2.flip(anno, 1)
     return image, anno
 
-def random_flip(processed_image, anno, prob=0.5):
-    random_value = np.random.random()
-    is_flipped = random_value <= prob
-    if is_flipped:
-        return tf.image.flip_left_right(processed_image), tf.squeeze(tf.image.flip_left_right(tf.expand_dims(anno, 2)), 2)
-    else:
-        return processed_image, anno
 
-def padding(processed_image, anno, crop_height, crop_width, rgb_mean, num_channels=3):
+def random_pad_crop(image, anno):
 
-    # padding
-    image_shape = tf.shape(processed_image)
-    image_height = image_shape[0]
-    image_width = image_shape[1]
+    image = image.astype(np.float32)
 
-    target_height = image_height + tf.maximum(crop_height - image_height, 0)
-    target_width = image_width + tf.maximum(crop_width - image_width, 0)
+    height, width = anno.shape
 
-    padding_img = [[0, target_height - crop_height], [0, target_width - crop_width], [0, 0]]
-    padding_anno = [[0, target_height - crop_height], [0, target_width - crop_width]]
+    #padded_image = np.pad(image, ((0, np.maximum(height, HEIGHT) - height), (0, np.maximum(width, WIDTH) - width), (0, 0)), mode='constant', constant_values=_MEAN_RGB)
 
-    channels = tf.split(axis=2, num_or_size_splits=num_channels, value=processed_image)
+    padded_image_r = np.pad(image[:, :, 0], ((0, np.maximum(height, HEIGHT) - height), (0, np.maximum(width, WIDTH) - width)), mode='constant', constant_values=_R_MEAN)
+    padded_image_g = np.pad(image[:, :, 1], ((0, np.maximum(height, HEIGHT) - height), (0, np.maximum(width, WIDTH) - width)), mode='constant', constant_values=_G_MEAN)
+    padded_image_b = np.pad(image[:, :, 2], ((0, np.maximum(height, HEIGHT) - height), (0, np.maximum(width, WIDTH) - width)), mode='constant', constant_values=_B_MEAN)
+    padded_image = np.zeros(shape=[np.maximum(height, HEIGHT), np.maximum(width, WIDTH), 3], dtype=np.float32)
+    padded_image[:, :, 0] = padded_image_r
+    padded_image[:, :, 1] = padded_image_g
+    padded_image[:, :, 2] = padded_image_b
 
-    #processed_image = tf.convert_to_tensor(np.zeros([target_height, target_width, 3], dtype=np.float32))
-    for i in range(num_channels):
-         if i == 0:
-             processed_image = tf.pad(channels[i], padding_img, mode='CONSTANT', constant_values=rgb_mean[i])
-         else:
-             processed_image = tf.concat([processed_image, tf.pad(channels[i], padding_img, mode='CONSTANT', constant_values=rgb_mean[i])], -1)
+    padded_anno = np.pad(anno, ((0, np.maximum(height, HEIGHT) - height), (0, np.maximum(width, WIDTH) - width)), mode='constant', constant_values=_IGNORE_LABEL)
 
-    anno = tf.pad(anno, padding_anno, mode='CONSTANT', constant_values=255)
+    y = random.randint(0, np.maximum(height, HEIGHT) - HEIGHT)
+    x = random.randint(0, np.maximum(width, WIDTH) - WIDTH)
 
-    return processed_image, anno
+    cropped_image = padded_image[y:y+HEIGHT, x:x+WIDTH, :]
+    cropped_anno = padded_anno[y:y+HEIGHT, x:x+WIDTH]
 
-def random_crop(processed_image, anno, crop_height, crop_width, channels=3):
-
-    shape = tf.shape(anno)
-    image_height = shape[0]
-    image_width = shape[1]
-
-    max_offset_height = tf.reshape(image_height - crop_height + 1, [])
-    max_offset_width = tf.reshape(image_width - crop_width + 1, [])
-
-    offset_height = tf.random_uniform(
-        [], maxval=max_offset_height, dtype=tf.int32)
-    offset_width = tf.random_uniform(
-        [], maxval=max_offset_width, dtype=tf.int32)
-
-    processed_image = tf.slice(processed_image, [offset_height, offset_width, 0], [crop_height, crop_width, channels])
-    anno = tf.slice(anno, [offset_height, offset_width], [crop_height, crop_width])
-
-    return processed_image, anno
-
-def mean_substraction(image, rgb_mean, num_channels = 3):
-    channels = tf.split(axis=2, num_or_size_splits=num_channels, value=image)
-    for i in range(num_channels):
-        channels[i] -= rgb_mean[i]
-    return tf.concat(axis=2, values=channels)
-
-def preprocess(image, anno, crop_height, crop_width, random_scales, scales, random_mirror, rgb_mean):
-    original_image = image
-    processed_image = tf.cast(image, tf.float32)
-
-    if random_scales:
-        scale = choice(scales)
-        processed_image, anno = scale_image_anno(processed_image, anno, scale)
+    return cropped_image, cropped_anno
 
 
-    processed_image, anno = padding(processed_image, anno, crop_height, crop_width, rgb_mean)
+def random_resize(image, anno):
+    height, width = anno.shape
 
-    processed_image, anno = random_crop(processed_image, anno, crop_height, crop_width)
+    scale = choice(SCALES)
+    scale_image = cv2.resize(image, (int(scale * width), int(scale * height)), interpolation=cv2.INTER_LINEAR)
+    scale_anno = cv2.resize(anno, (int(scale * width), int(scale * height)), interpolation=cv2.INTER_NEAREST)
 
-    if random_mirror:
-        processed_image, anno = random_flip(processed_image, anno)
-
-    processed_image = mean_substraction(processed_image, rgb_mean=rgb_mean)
-
-    processed_image = tf.reshape(processed_image, [crop_height, crop_width, 3])
-    anno = tf.reshape(anno, [crop_height, crop_width])
+    return scale_image, scale_anno
 
 
-    return original_image, processed_image, anno
+def mean_substraction(image):
+    substraction_mean_image = np.zeros_like(image, dtype=np.float32)
+    substraction_mean_image[:, :, 0] = image[:, :, 0] - _R_MEAN
+    substraction_mean_image[:, :, 1] = image[:, :, 1] - _G_MEAN
+    substraction_mean_image[:, :, 2] = image[:, :, 2] - _B_MEAN
 
-def read_and_decode(filelist, HEIGHT, WIDTH):
-    filename_queue = tf.train.string_input_producer(filelist)
-    reader = tf.TFRecordReader()
-    _, serialized_exampe = reader.read(filename_queue)
+    return substraction_mean_image
 
-    features = tf.parse_single_example(serialized_exampe,
-                                       features={
-                                           'image/encoded': tf.FixedLenFeature([], tf.string),
-                                           'image/anno': tf.FixedLenFeature([], tf.string),
-                                           'image/filename': tf.FixedLenFeature([], tf.string),
-                                           'image/height': tf.FixedLenFeature([], tf.int64),
-                                           'image/width': tf.FixedLenFeature([], tf.int64),
-                                       })
 
-    image = tf.decode_raw(features['image/encoded'], tf.uint8)
-    anno = tf.decode_raw(features['image/anno'], tf.uint8)
-    filename = features['image/filename']
-    height = tf.cast(features['image/height'], tf.int32)
-    width = tf.cast(features['image/width'], tf.int32)
+def augment(img, anno):
 
-    image = tf.reshape(image, [HEIGHT, WIDTH, 3])
-    anno = tf.reshape(anno, [HEIGHT, WIDTH])
+    scale_img, scale_anno = random_resize(img, anno)
 
-    return image, anno, filename
+    img = img.astype(np.float32)
+    cropped_image, cropped_anno = random_pad_crop(scale_img, scale_anno)
 
-def read_batch(batch_size, HEIGHT, WIDTH, crop_height, crop_width, random_scales, scales, random_mirror, rgb_mean, type='train'):
-    filelist_train = [ os.path.join(tfrecord_file, 'image_%s_%05d-of-%05d.tfrecord' % ('train', shard_id, _NUM_SHARDS - 1)) for
-        shard_id in range(_NUM_SHARDS)]
-    filelist_val = [os.path.join(tfrecord_file, 'image_%s_%05d-of-%05d.tfrecord' % ('val', shard_id, _NUM_SHARDS - 1))
-                    for shard_id in range(_NUM_SHARDS)]
-    filelist_test = [os.path.join(tfrecord_file, 'image_%s_%05d-of-%05d.tfrecord' % ('test', shard_id, _NUM_SHARDS - 1))
-                     for shard_id in range(_NUM_SHARDS)]
 
-    filelist = []
-    if type == 'train':
-        filelist = filelist + filelist_train
-    elif type == 'val':
-        filelist = filelist + filelist_val
-    elif type == 'test':
-        filelist = filelist + filelist_test
-    elif type == 'trainval':
-        filelist = filelist + filelist_train + filelist_val
-    else:
-        raise Exception('data set name not exits')
+    flipped_img, flipped_anno = flip_random_left_right(cropped_image, cropped_anno)
 
-    print(filelist)
-    image, anno, filename = read_and_decode(filelist, HEIGHT, WIDTH)
+    substracted_img = mean_substraction(flipped_img)
 
-    original_image, image_aug, anno_aug = preprocess(image, anno, crop_height, crop_width, random_scales, scales, random_mirror, rgb_mean)
+    return substracted_img, flipped_anno
 
-    image_0_batch, image_batch, anno_batch, filename = tf.train.shuffle_batch([original_image, image_aug, anno_aug, filename], batch_size=batch_size,
-                                                               capacity=128, min_after_dequeue=64, num_threads=2)
 
-    # print(image_batch, anno_batch)
-    #image_0_batch, image_batch, anno_batch = augmentation_scale(image_0_batch, image_batch, anno_batch, mmin=0.5, mmax=2.0, type=type)
-    return image_0_batch, image_batch, anno_batch, filename
+class Dataset(object):
+
+    def __init__(self, img_filenames, anno_filenames):
+        self._num_examples = len(anno_filenames)
+        self._image_data = img_filenames
+        self._labels = anno_filenames
+        self._epochs_done = 0
+        self._index_in_epoch = 0
+        self._flag = 0
+
+    def next_batch(self, batch_size, HEIGHT, WIDTH, is_training=False, Shuffle=True):
+
+        start = self._index_in_epoch
+        self._index_in_epoch += batch_size
+        if self._index_in_epoch > self._num_examples:
+            self._epochs_done += 1
+            start = 0
+            self._index_in_epoch = batch_size
+            assert batch_size <= self._num_examples
+
+            if Shuffle:
+                self._image_data, self._labels = shuffle(self._image_data, self._labels)
+
+        end = self._index_in_epoch
+
+        batch_img_raw = np.zeros([batch_size, HEIGHT, WIDTH, 3], dtype=np.float32)
+        batch_img = np.zeros([batch_size, HEIGHT, WIDTH, 3], dtype=np.float32)
+        batch_anno = np.zeros([batch_size, HEIGHT, WIDTH], dtype=np.uint8)
+        filenames = []
+        for i in range(start, end):
+            img = cv2.imread(self._image_data[i])
+            img = img[:,:,::-1]
+            anno = cv2.imread(self._labels[i], cv2.IMREAD_GRAYSCALE)
+
+            if is_training:
+                aug_img, aug_anno = augment(img, anno)
+
+                height, width, _ = img.shape
+                batch_img_raw[i-start, 0:np.minimum(height, HEIGHT), 0:np.minimum(width, WIDTH), :] = img[0:np.minimum(height, HEIGHT), 0:np.minimum(width, WIDTH), :]
+                batch_img[i-start, ...] = aug_img
+                batch_anno[i-start, ...] = aug_anno
+                filenames.append(os.path.basename(self._image_data[i]))
+            #print(os.path.basename(self._image_data[i]), os.path.basename(self._labels[i]))
+        if is_training:
+            return batch_img_raw, batch_img, batch_anno, filenames
+        else:
+            inference_image = mean_substraction(img)
+            #print(os.path.basename(self._image_data[start]))
+            return np.expand_dims(img, 0), np.expand_dims(inference_image, 0), np.expand_dims(anno, 0), os.path.basename(self._image_data[start])
+
+
+def read_train_data(Shuffle=True):
+    f = open(IMG_TRAIN_LIST)
+    lines = f.readlines()
+    img_filenames = [line.strip() for line in lines]
+
+    anno_filenames = [filename.replace(CITYSCAPE_IMG_DIR, CITYSCAPE_ANNO_DIR) for filename in img_filenames]
+    anno_filenames = [filename.replace('_leftImg8bit.png', '_gtFine_labelTrainIds.png') for filename in anno_filenames]
+
+    if Shuffle:
+        img_filenames, anno_filenames = shuffle(img_filenames, anno_filenames)
+
+    train_data = Dataset(img_filenames, anno_filenames)
+
+    return train_data
+
+
+
+def read_val_data(Shuffle=True):
+    f = open(IMG_VAL_LIST)
+    lines = f.readlines()
+    img_filenames = [line.strip() for line in lines]
+    #f_anno = open(ANNO_VAL_LIST)
+    #anno_filenames = f_anno.readlines()
+
+    anno_filenames = [filename.replace(CITYSCAPE_IMG_DIR, CITYSCAPE_ANNO_DIR) for filename in img_filenames]
+    anno_filenames = [filename.replace('_leftImg8bit.png', '_gtFine_labelTrainIds.png') for filename in anno_filenames]
+
+    if Shuffle:
+        img_filenames, anno_filenames = shuffle(img_filenames, anno_filenames)
+
+    val_data = Dataset(img_filenames, anno_filenames)
+
+    return val_data
+
+def read_test_data(Shuffle=True):
+    f = open(IMG_TEST_LIST)
+    lines = f.readlines()
+    img_filenames = [line.strip() for line in lines]
+
+    anno_filenames = [filename.replace(CITYSCAPE_IMG_DIR, CITYSCAPE_ANNO_DIR) for filename in img_filenames]
+    anno_filenames = [filename.replace('_leftImg8bit.png', '_gtFine_labelTrainIds.png') for filename in anno_filenames]
+
+    if Shuffle:
+        img_filenames, anno_filenames = shuffle(img_filenames, anno_filenames)
+
+    test_data = Dataset(img_filenames, anno_filenames)
+
+    return test_data
+
 
 if __name__ == '__main__':
-    BATCH_SIZE = 4
-    image_0, image_batch, anno_batch, filename = read_batch(BATCH_SIZE, type='train')
-    with tf.Session() as sess:
-        sess.run(tf.global_variables_initializer())
-        coord = tf.train.Coordinator()
-        threads = tf.train.start_queue_runners(sess=sess, coord=coord)
+    train_data = read_train_data()
+    test_data = read_val_data()
+    train_img_raw, train_img_data, train_lables, train_filenames = train_data.next_batch(4, True)
+    test_img_raw, test_img_data, test_labels, test_filenames = test_data.next_batch(1)
 
-        b_image_0, b_image, b_anno, b_filename = sess.run([image_0, image_batch, anno_batch, filename])
-        print(b_filename)
-        '''
-        print(b_image_0.shape)
-        print(b_image.shape)
-        print(b_anno.shape)
-        print(b_filename)
+    for i in range(4):
+        cv2.imwrite('test/trainraw_%d.png' % i, train_img_raw[i])
+        cv2.imwrite('test/train_%d.png'%i, train_img_data[i])
+        cv2.imwrite('test/train_labels_%d.png'%i, train_lables[i])
+        print(train_filenames[i])
 
-        print(b_image_0)
-        print(b_image)
-        print(b_anno)
-        print(np.unique(b_anno))
-        '''
-        print(np.unique(b_anno))
-        for i in range(BATCH_SIZE):
-            cv2.imwrite('test/%d_img.png'%i, b_image_0[i])
-            cv2.imwrite('test/%d_img_2.png' % i, 255 * (0.5 + b_image[i]))
-            cv2.imwrite('test/%d_anno.png' % i, 10*b_anno[i])
+    print("===============")
 
-        coord.request_stop()
+    for i in range(1):
+        cv2.imwrite('test/testraw_%d.png' % i, test_img_raw[i])
 
-        coord.join(threads)
+        cv2.imwrite('test/test_%d.png' % i, test_img_data[i])
+        cv2.imwrite('test/test_labels_%d.png' % i, test_labels[i])
+        print(test_filenames)

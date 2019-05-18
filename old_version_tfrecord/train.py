@@ -59,7 +59,7 @@ flags.DEFINE_float('power', 0.9, 'Used for poly learning rate.')
 flags.DEFINE_string('saved_ckpt_path', './checkpoint/', 'Path to save training checkpoint.')
 flags.DEFINE_string('saved_summary_train_path', './summary/train/', 'Path to save training summary.')
 flags.DEFINE_string('saved_summary_test_path', './summary/test/', 'Path to save test summary.')
-flags.DEFINE_string('pretrained_model_path', './resnet_v2_101_2017_04_14/resnet_v2_101.ckpt', 'Path to save pretrained model.')
+flags.DEFINE_string('pretrained_model_path', './resnet_v2_101_2017_04_14/resnet_v2_101.ckpt', 'Path to save test summary.')
 
 '''
 
@@ -125,9 +125,6 @@ def cal_loss(logits, y, loss_weight=1.0):
     return tf.reduce_mean(loss)
 
 
-train_data = input_data.read_train_data()
-val_data = input_data.read_val_data()
-
 with tf.name_scope('input'):
     x = tf.placeholder(dtype=tf.float32, shape=[FLAGS.batch_size, FLAGS.crop_height, FLAGS.crop_width, FLAGS.channels], name='x_input')
     y = tf.placeholder(dtype=tf.int32, shape=[FLAGS.batch_size, FLAGS.crop_height, FLAGS.crop_width], name='ground_truth')
@@ -185,6 +182,10 @@ with tf.name_scope("mIoU"):
 
 merged = tf.summary.merge_all()
 
+image_batch_0, image_batch, anno_batch, filename = input_data.read_batch(FLAGS.batch_size, FLAGS.height, FLAGS.width, FLAGS.crop_height, FLAGS.crop_width, FLAGS.train_random_scales, FLAGS.scales, FLAGS.train_random_mirror, FLAGS.rgb_mean, type='train')
+
+
+_, image_batch_test, anno_batch_test, filename_test = input_data.read_batch(FLAGS.batch_size, FLAGS.height, FLAGS.width, FLAGS.crop_height, FLAGS.crop_width, FLAGS.val_random_scales, FLAGS.scales, FLAGS.val_random_mirror, FLAGS.rgb_mean, type='val')
 
 with tf.Session() as sess:
 
@@ -209,10 +210,10 @@ with tf.Session() as sess:
 
     for i in range(0, MAX_STEPS + 1):
 
+        b_image_0, b_image, b_anno, b_filename = sess.run([image_batch_0, image_batch, anno_batch, filename])
 
+        b_image_test, b_anno_test, b_filename_test = sess.run([image_batch_test, anno_batch_test, filename_test])
 
-        b_image_0, b_image, b_anno, b_filename = train_data.next_batch(FLAGS.batch_size, is_training=True)
-        b_image_test_0, b_image_test, b_anno_test, b_filename_test = val_data.next_batch(FLAGS.batch_size, is_training=True)
 
         _ = sess.run(optimizer, feed_dict={x: b_image, y: b_anno})
 
