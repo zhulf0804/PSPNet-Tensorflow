@@ -39,7 +39,7 @@ flags.DEFINE_boolean('val_random_mirror', False, 'whether to random mirror.')
 
 # for training configuration
 flags.DEFINE_integer('batch_size', 4, 'The number of images in each batch during training.')
-flags.DEFINE_integer('max_epoches', 40, 'The max epoches to train the model.')
+flags.DEFINE_integer('max_epoches',120, 'The max epoches to train the model.')
 flags.DEFINE_integer('samples', 2975, 'The number of images used to train.')
 
 MAX_STEPS = FLAGS.max_epoches * FLAGS.samples // FLAGS.batch_size
@@ -51,7 +51,7 @@ flags.DEFINE_integer('output_stride', 16, 'output stride in the resnet model.')
 # network hyper-parameters
 flags.DEFINE_float('initial_lr', 1e-2, 'The initial learning rate.')
 flags.DEFINE_float('end_lr', 1e-6, 'The end learning rate.')
-flags.DEFINE_integer('decay_steps', 50000, 'Used for poly learning rate.')
+flags.DEFINE_integer('decay_steps', 70000, 'Used for poly learning rate.')
 flags.DEFINE_float('weight_decay', 1e-4, 'The weight decay value for l2 regularization.')
 flags.DEFINE_float('power', 0.9, 'Used for poly learning rate.')
 
@@ -60,6 +60,13 @@ flags.DEFINE_string('saved_ckpt_path', './checkpoint/', 'Path to save training c
 flags.DEFINE_string('saved_summary_train_path', './summary/train/', 'Path to save training summary.')
 flags.DEFINE_string('saved_summary_test_path', './summary/test/', 'Path to save test summary.')
 flags.DEFINE_string('pretrained_model_path', './resnet_v2_101_2017_04_14/resnet_v2_101.ckpt', 'Path to save pretrained model.')
+flags.DEFINE_integer('print_steps', 200, 'Used for print training information.')
+flags.DEFINE_integer('saved_steps', 5000, 'Used for saving model.')
+flags.DEFINE_integer('iou_steps', 1000, 'Used for print mIoU information.')
+
+
+
+
 
 '''
 
@@ -125,8 +132,8 @@ def cal_loss(logits, y, loss_weight=1.0):
     return tf.reduce_mean(loss)
 
 
-train_data = input_data.read_train_data()
-val_data = input_data.read_val_data()
+train_data = input_data.read_train_data(rgb_mean=FLAGS.rgb_mean, crop_height = FLAGS.crop_height, crop_width = FLAGS.crop_width, classes = FLAGS.classes, ignore_label = FLAGS.ignore_label, scales = FLAGS.scales)
+val_data = input_data.read_val_data(rgb_mean=FLAGS.rgb_mean, crop_height = FLAGS.crop_height, crop_width = FLAGS.crop_width, classes = FLAGS.classes, ignore_label = FLAGS.ignore_label, scales = FLAGS.scales)
 
 with tf.name_scope('input'):
     x = tf.placeholder(dtype=tf.float32, shape=[FLAGS.batch_size, FLAGS.crop_height, FLAGS.crop_width, FLAGS.channels], name='x_input')
@@ -151,7 +158,7 @@ with tf.name_scope('loss'):
     loss_1 = cal_loss(logits, y)
     tf.summary.scalar('loss', loss_1)
     loss_2 = cal_loss(auxi_logits, y)
-    loss_all = loss_1 + l2_loss
+    loss_all = loss_1 + 0.4*loss_2 + l2_loss
     #loss_all = loss
     tf.summary.scalar('loss_all', loss_all)
 
@@ -188,8 +195,6 @@ merged = tf.summary.merge_all()
 
 with tf.Session() as sess:
 
-    coord = tf.train.Coordinator()
-    threads = tf.train.start_queue_runners(sess=sess, coord=coord)
 
     sess.run(tf.local_variables_initializer())
     sess.run(tf.global_variables_initializer())
@@ -211,8 +216,8 @@ with tf.Session() as sess:
 
 
 
-        b_image_0, b_image, b_anno, b_filename = train_data.next_batch(FLAGS.batch_size, is_training=True)
-        b_image_test_0, b_image_test, b_anno_test, b_filename_test = val_data.next_batch(FLAGS.batch_size, is_training=True)
+        b_image_0, b_image, b_anno, b_filename = train_data.next_batch(FLAGS.batch_size, FLAGS.train_random_scales, FLAGS.train_random_mirror, is_training=True)
+        b_image_test_0, b_image_test, b_anno_test, b_filename_test = val_data.next_batch(FLAGS.batch_size, FLAGS.val_random_scales, FLAGS.val_random_mirror, is_training=True)
 
         _ = sess.run(optimizer, feed_dict={x: b_image, y: b_anno})
 
@@ -228,10 +233,10 @@ with tf.Session() as sess:
 
         learning_rate = sess.run(lr)
 
-        if i % 200 == 0:
+        if i % FLAGS.print_steps == 0:
             print(datetime.datetime.now().strftime("%Y.%m.%d-%H:%M:%S"), " | Step: %d | Train loss all: %f" % (i, train_loss_val_all))
 
-        if i % 1000 == 0:
+        if i % FLAGS.iou_steps == 0:
 
             train_mIoU_val, train_IoU_val = Utils.cal_batch_mIoU(pred_train, b_anno, FLAGS.classes)
             test_mIoU_val, test_IoU_val = Utils.cal_batch_mIoU(pred_test, b_anno_test, FLAGS.classes)
@@ -250,26 +255,11 @@ with tf.Session() as sess:
             print('------------------------------')
             #prediction = tf.argmax(logits, axis=-1, name='predictions')
 
-        if i % 1000 == 0:
-            for j in range(FLAGS.batch_size):
-                cv2.imwrite('images/img_%s' % b_filename[j], b_image_0[j])
 
-        if i % 5000 == 0:
+        if i % FLAGS.saved_steps == 0:
             saver.save(sess, os.path.join(FLAGS.saved_ckpt_path, 'pspnet.model'), global_step=i)
 
 
-    coord.request_stop()
-    coord.join(threads)
 
 
 
-
-if __name__ == '__main__':
-
-    with tf.Session() as sess:
-        input = tf.constant(0.1, shape=[2, 768, 768, 3])
-        sess.run(tf.global_variables_initializer())
-
-        for i in range(2):
-            print(sess.run(auxi_logits)[0, 0, 0])
-            print(sess.run(logits)[0, 0, 0])

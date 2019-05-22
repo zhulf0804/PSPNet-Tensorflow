@@ -6,10 +6,13 @@ import tensorflow as tf
 import numpy as np
 import os
 from PIL import Image
+import datetime
+
 import matplotlib.pyplot as plt
 import model.pspnet as PSPNet
 import input_data
 import utils.utils as Utils
+
 
 flags = tf.app.flags
 FLAGS = flags.FLAGS
@@ -20,6 +23,14 @@ flags.DEFINE_integer('width', 2048, 'The width of raw image.')
 flags.DEFINE_integer('batch_size', 1, 'Batch size.')
 flags.DEFINE_integer('classes', 19, 'The number of classes')
 flags.DEFINE_integer('ignore_label', 255, 'The ignore label value.')
+flags.DEFINE_integer('crop_height', 1024, 'The height of cropped image used for training.')
+flags.DEFINE_integer('crop_width', 2048, 'The width of cropped image used for training.')
+flags.DEFINE_integer('channels', 3, 'The channels of input image.')
+
+#flags.DEFINE_multi_float('rgb_mean', [123.15,115.90,103.06], 'RGB mean value of ImageNet.')
+flags.DEFINE_multi_float('rgb_mean', [72.39239876,82.90891754,73.15835921], 'RGB mean value of ImageNet.')
+
+flags.DEFINE_multi_float('scales', [0.5,0.75,1.0,1.25,1.5,1.75,2.0], 'Scales for random scale.')
 
 
 # for checkpoint
@@ -48,7 +59,8 @@ def color_gray(image):
 
     return return_img
 
-val_data = input_data.read_val_data()
+#val_data = input_data.read_val_data()
+val_data = input_data.read_val_data(rgb_mean=FLAGS.rgb_mean, crop_height = FLAGS.crop_height, crop_width = FLAGS.crop_width, classes = FLAGS.classes, ignore_label = FLAGS.ignore_label, scales = FLAGS.scales)
 
 with tf.name_scope("input"):
 
@@ -77,13 +89,16 @@ with tf.Session() as sess:
 
 
     for i in range(1):
+        print(datetime.datetime.now().strftime("%Y.%m.%d-%H:%M:%S"))
+
         b_image_0, b_image, b_anno, b_filename = val_data.next_batch(FLAGS.batch_size, is_training=False)
-
+        print(datetime.datetime.now().strftime("%Y.%m.%d-%H:%M:%S"))
         pred = sess.run(prediction, feed_dict={x: b_image, y: b_anno})
-
+        print(datetime.datetime.now().strftime("%Y.%m.%d-%H:%M:%S"))
         print(pred.shape, b_anno.shape)
 
         mIoU_val, IoU_val = Utils.cal_batch_mIoU(pred, b_anno, FLAGS.classes)
+        datetime.datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
         # save raw image, annotation, and prediction
         pred = pred.astype(np.uint8)
         b_anno = b_anno.astype(np.uint8)
@@ -107,3 +122,5 @@ with tf.Session() as sess:
 
         print("%s.png: prediction saved in %s, mIoU value is %.2f" % (basename, FLAGS.saved_prediction, mIoU_val))
         print(IoU_val)
+
+print(datetime.datetime.now().strftime("%Y.%m.%d-%H:%M:%S"))
