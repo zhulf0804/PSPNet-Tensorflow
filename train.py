@@ -42,9 +42,9 @@ flags.DEFINE_boolean('val_random_mirror', False, 'whether to random mirror.')
 # for training configuration
 flags.DEFINE_integer('batch_size', 4, 'The number of images in each batch during training.')
 flags.DEFINE_integer('max_epoches',120, 'The max epoches to train the model.')
-flags.DEFINE_integer('samples', 2975, 'The number of images used to train.')
-
-MAX_STEPS = FLAGS.max_epoches * FLAGS.samples // FLAGS.batch_size
+#flags.DEFINE_integer('samples', 2975, 'The number of images in train set used to train.')
+flags.DEFINE_integer('train_samples', 2975, 'The number of images in train set used to train.')
+flags.DEFINE_integer('trainval_samples', 3475, 'The number of images in trainval set used to train.')
 
 # for network configration
 flags.DEFINE_integer('output_stride', 16, 'output stride in the resnet model.')
@@ -90,10 +90,12 @@ def cal_loss(logits, y, loss_weight=1.0):
 
 if FLAGS.dataset == 'train':
     print('training on train set')
+    MAX_STEPS = FLAGS.max_epoches * FLAGS.train_samples // FLAGS.batch_size
     train_data = input_data.read_train_data(rgb_mean=FLAGS.rgb_mean, crop_height = FLAGS.crop_height, crop_width = FLAGS.crop_width, classes = FLAGS.classes, ignore_label = FLAGS.ignore_label, scales = FLAGS.scales)
     val_data = input_data.read_val_data(rgb_mean=FLAGS.rgb_mean, crop_height = FLAGS.crop_height, crop_width = FLAGS.crop_width, classes = FLAGS.classes, ignore_label = FLAGS.ignore_label, scales = FLAGS.scales)
 elif FLAGS.dataset == 'trainval':
     print('training on trainval set')
+    MAX_STEPS = FLAGS.max_epoches * FLAGS.trainval_samples // FLAGS.batch_size
     trainval_data = input_data.read_trainval_data(rgb_mean=FLAGS.rgb_mean, crop_height = FLAGS.crop_height, crop_width = FLAGS.crop_width, classes = FLAGS.classes, ignore_label = FLAGS.ignore_label, scales = FLAGS.scales)
 else:
     raise Exception('train or trainval is needed')

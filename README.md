@@ -58,13 +58,13 @@ A PSPNet([Pyramid Scene Parsing Network](http://openaccess.thecvf.com/content_cv
 
     + for **train + val** dataset
     
-        > python train.py --dataset trainval --samples 3475
+        > python train.py --dataset trainval
         
     + for **train** dataset
      
         > python train.py
 
-+ Inference [Use your trained model or download checkpoint [here]()]
++ Inference [Use your trained model or download checkpoint [here](https://pan.baidu.com/s/19emHaT8PMoEcDBJoWGYcFQ)]
 
     + Inference an image in test set randomly
         
