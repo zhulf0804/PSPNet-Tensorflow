@@ -7,10 +7,13 @@ import os
 import glob
 import numpy as np
 from PIL import Image
+import argparse
 from collections import namedtuple
-import Cityscape.labels as Labels
+
 
 CITYSCAPE_DIR = '/Volumes/Samsung_T5/Cityscape' # cofig your data path
+
+
 CITYSCAPE_IMG_DIR = os.path.join(CITYSCAPE_DIR, 'leftImg8bit')
 CITYSCAPE_ANNO_DIR = os.path.join(CITYSCAPE_DIR, 'gtFine')
 
@@ -59,24 +62,11 @@ def get_img_file_list():
                 f.write(img_file_path + '\n')
         print("image %s files: %d" %(types[i], length))
 
-def get_img_infor(file):
-    img = Image.open(file, 'r')
-    img_np = np.array(img)
-    anno_np = Labels.id_to_trainId_map_func(img_np)
-    print(img_np.shape)
-    print(np.unique(img_np))
-    print(anno_np.shape)
-    print(np.unique(anno_np))
-
 if __name__ == '__main__':
+
     get_img_file_list()
     get_anno_file_list()
 
-
-    #f = open(SAVED_ANNO_TRAIN_FILE, 'r')
-    #files = f.readlines()
-    #for file in files:
-    #    get_img_infor(file.strip())
 
 
 

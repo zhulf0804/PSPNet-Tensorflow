@@ -29,6 +29,8 @@ flags.DEFINE_integer('classes', 19, 'The ignore label value.')
 #flags.DEFINE_multi_float('rgb_mean', [123.15,115.90,103.06], 'RGB mean value of ImageNet.')
 flags.DEFINE_multi_float('rgb_mean', [72.39239876,82.90891754,73.15835921], 'RGB mean value of ImageNet.')
 
+flags.DEFINE_string('dataset', 'train', 'which dataset to select to train.(train or trainval).')
+
 # for augmentation
 flags.DEFINE_boolean('train_random_scales', True, 'whether to random scale.')
 flags.DEFINE_multi_float('scales', [0.5,0.75,1.0,1.25,1.5,1.75,2.0], 'Scales for random scale.')
@@ -65,51 +67,6 @@ flags.DEFINE_integer('saved_steps', 5000, 'Used for saving model.')
 flags.DEFINE_integer('iou_steps', 1000, 'Used for print mIoU information.')
 
 
-
-
-
-'''
-
-def weighted_loss(logits, labels, num_classes, head=None, ignore=19):
-    """re-weighting"""
-    with tf.name_scope('loss'):
-        logits = tf.reshape(logits, (-1, num_classes))
-
-        epsilon = tf.constant(value=1e-10)
-
-        logits = logits + epsilon
-
-        label_flat = tf.reshape(labels, (-1, 1))
-        labels = tf.reshape(tf.one_hot(label_flat, depth=num_classes), (-1, num_classes))
-
-        softmax = tf.nn.softmax(logits)
-
-        #if head == None:
-        #    cross_entropy = -tf.reduce_sum(labels * tf.log(softmax + epsilon), axis=[1])
-        #else:
-        cross_entropy = -tf.reduce_sum(tf.multiply(labels * tf.log(softmax + epsilon), head), axis=[1])
-
-        cross_entropy_mean = tf.reduce_mean(cross_entropy, name='cross_entropy')
-
-    return cross_entropy_mean
-
-def cal_loss(logits, labels):
-
-
-    #CLASS_NAMES = ['road', 'sidewalk', 'building', 'wall', 'fence', 'pole', 'traffic light', 'traffic sign', 'vegetation', 'terrain', 'sky', 'person', 'rider', 'car', 'truck', 'bus', 'train', 'motorcycle', 'bicycle']
-
-
-    loss_weight = [3.045384, 12.862123, 4.509889, 38.15694, 35.25279, 31.482613, \
-                    45.792305, 39.694073, 6.0639296, 32.16484, 17.109228, 31.563286, \
-                    47.333973, 11.610675, 44.60042, 45.23716, 45.283024, 48.14782, 41.924667]
-    loss_weight = np.array(loss_weight)
-
-    labels = tf.cast(labels, tf.int32)
-
-    # return loss(logits, labels)
-    return weighted_loss(logits, labels, num_classes=CLASSES, head=loss_weight)
-'''
-
 def cal_loss(logits, y, loss_weight=1.0):
     '''
     raw_prediction = tf.reshape(logits, [-1, CLASSES])
@@ -131,9 +88,15 @@ def cal_loss(logits, y, loss_weight=1.0):
 
     return tf.reduce_mean(loss)
 
-
-train_data = input_data.read_train_data(rgb_mean=FLAGS.rgb_mean, crop_height = FLAGS.crop_height, crop_width = FLAGS.crop_width, classes = FLAGS.classes, ignore_label = FLAGS.ignore_label, scales = FLAGS.scales)
-val_data = input_data.read_val_data(rgb_mean=FLAGS.rgb_mean, crop_height = FLAGS.crop_height, crop_width = FLAGS.crop_width, classes = FLAGS.classes, ignore_label = FLAGS.ignore_label, scales = FLAGS.scales)
+if FLAGS.dataset == 'train':
+    print('training on train set')
+    train_data = input_data.read_train_data(rgb_mean=FLAGS.rgb_mean, crop_height = FLAGS.crop_height, crop_width = FLAGS.crop_width, classes = FLAGS.classes, ignore_label = FLAGS.ignore_label, scales = FLAGS.scales)
+    val_data = input_data.read_val_data(rgb_mean=FLAGS.rgb_mean, crop_height = FLAGS.crop_height, crop_width = FLAGS.crop_width, classes = FLAGS.classes, ignore_label = FLAGS.ignore_label, scales = FLAGS.scales)
+elif FLAGS.dataset == 'trainval':
+    print('training on trainval set')
+    trainval_data = input_data.read_trainval_data(rgb_mean=FLAGS.rgb_mean, crop_height = FLAGS.crop_height, crop_width = FLAGS.crop_width, classes = FLAGS.classes, ignore_label = FLAGS.ignore_label, scales = FLAGS.scales)
+else:
+    raise Exception('train or trainval is needed')
 
 with tf.name_scope('input'):
     x = tf.placeholder(dtype=tf.float32, shape=[FLAGS.batch_size, FLAGS.crop_height, FLAGS.crop_width, FLAGS.channels], name='x_input')
@@ -215,28 +178,38 @@ with tf.Session() as sess:
     for i in range(0, MAX_STEPS + 1):
 
 
-
-        b_image_0, b_image, b_anno, b_filename = train_data.next_batch(FLAGS.batch_size, FLAGS.train_random_scales, FLAGS.train_random_mirror, is_training=True)
-        b_image_test_0, b_image_test, b_anno_test, b_filename_test = val_data.next_batch(FLAGS.batch_size, FLAGS.val_random_scales, FLAGS.val_random_mirror, is_training=True)
-
+        if FLAGS.dataset == 'train':
+            b_image_0, b_image, b_anno, b_filename = train_data.next_batch(FLAGS.batch_size, FLAGS.train_random_scales, FLAGS.train_random_mirror, is_training=True)
+            b_image_test_0, b_image_test, b_anno_test, b_filename_test = val_data.next_batch(FLAGS.batch_size, FLAGS.val_random_scales, FLAGS.val_random_mirror, is_training=True)
+        elif FLAGS.dataset == 'trainval':
+            b_image_0, b_image, b_anno, b_filename = trainval_data.next_batch(FLAGS.batch_size, FLAGS.train_random_scales,
+                                                                           FLAGS.train_random_mirror, is_training=True)
         _ = sess.run(optimizer, feed_dict={x: b_image, y: b_anno})
 
         train_summary = sess.run(merged, feed_dict={x: b_image, y: b_anno})
         train_summary_writer.add_summary(train_summary, i)
-        test_summary = sess.run(merged, feed_dict={x: b_image_test, y: b_anno_test})
-        test_summary_writer.add_summary(test_summary, i)
+
+        if FLAGS.dataset == 'train':
+            test_summary = sess.run(merged, feed_dict={x: b_image_test, y: b_anno_test})
+            test_summary_writer.add_summary(test_summary, i)
 
         pred_train, train_loss_val_all, train_loss_val = sess.run([predictions, loss_all, loss_1], feed_dict={x: b_image, y: b_anno})
-        pred_test, test_loss_val_all, test_loss_val = sess.run([predictions, loss_all, loss_1], feed_dict={x: b_image_test, y: b_anno_test})
+
+        if FLAGS.dataset == 'train':
+            pred_test, test_loss_val_all, test_loss_val = sess.run([predictions, loss_all, loss_1], feed_dict={x: b_image_test, y: b_anno_test})
 
 
 
         learning_rate = sess.run(lr)
 
-        if i % FLAGS.print_steps == 0:
+        if i % FLAGS.print_steps == 0 and FLAGS.dataset == 'train':
             print(datetime.datetime.now().strftime("%Y.%m.%d-%H:%M:%S"), " | Step: %d | Train loss all: %f" % (i, train_loss_val_all))
 
-        if i % FLAGS.iou_steps == 0:
+        if i % FLAGS.print_steps == 0 and FLAGS.dataset == 'trainval':
+            print(datetime.datetime.now().strftime("%Y.%m.%d-%H:%M:%S"), " | Step: %d | Train loss all: %f" % (i, train_loss_val_all))
+
+
+        if i % FLAGS.iou_steps == 0 and FLAGS.dataset == 'train':
 
             train_mIoU_val, train_IoU_val = Utils.cal_batch_mIoU(pred_train, b_anno, FLAGS.classes)
             test_mIoU_val, test_IoU_val = Utils.cal_batch_mIoU(pred_test, b_anno_test, FLAGS.classes)
@@ -263,3 +236,5 @@ with tf.Session() as sess:
 
 
 
+# python train.py --dataset trainval --samples 3475
+# python train.py

@@ -10,6 +10,7 @@ import datetime
 
 import matplotlib.pyplot as plt
 import model.pspnet as PSPNet
+import cv2
 import input_data
 import utils.utils as Utils
 
@@ -32,6 +33,8 @@ flags.DEFINE_multi_float('rgb_mean', [72.39239876,82.90891754,73.15835921], 'RGB
 
 flags.DEFINE_multi_float('scales', [0.5,0.75,1.0,1.25,1.5,1.75,2.0], 'Scales for random scale.')
 
+# for prediction
+flags.DEFINE_string('file_path', '', 'The file path to be predicted.')
 
 # for checkpoint
 flags.DEFINE_string('pretrained_model_path', './resnet_v2_101_2017_04_14/resnet_v2_101.ckpt', 'Path to save pretrained model.')
@@ -85,30 +88,38 @@ with tf.Session() as sess:
     if ckpt and ckpt.model_checkpoint_path:
         saver.restore(sess, ckpt.model_checkpoint_path)
         print("Model restored...")
-    print("predicting on %s set..." % FLAGS.prediction_on)
 
 
     for i in range(1):
-        print(datetime.datetime.now().strftime("%Y.%m.%d-%H:%M:%S"))
 
-        b_image_0, b_image, b_anno, b_filename = val_data.next_batch(FLAGS.batch_size, is_training=False)
-        print(datetime.datetime.now().strftime("%Y.%m.%d-%H:%M:%S"))
-        pred = sess.run(prediction, feed_dict={x: b_image, y: b_anno})
-        print(datetime.datetime.now().strftime("%Y.%m.%d-%H:%M:%S"))
-        print(pred.shape, b_anno.shape)
+        if FLAGS.file_path == '':
+            print("predicting on %s set..." % FLAGS.prediction_on)
+            b_image_0, b_image, _, b_filename = val_data.next_batch(FLAGS.batch_size, is_training=False)
+        else:
+            b_image_0 = cv2.imread(FLAGS.file_path)
 
-        mIoU_val, IoU_val = Utils.cal_batch_mIoU(pred, b_anno, FLAGS.classes)
-        datetime.datetime.now().strftime("%Y.%m.%d-%H:%M:%S")
+            b_image = b_image_0[:, :, ::-1]
+            b_image = b_image.astype(np.float32)
+            b_image = input_data.mean_substraction(b_image, FLAGS.rgb_mean)
+
+            b_image_0 = np.expand_dims(b_image_0, 0)
+            b_image = np.expand_dims(b_image, 0)
+            b_filename = os.path.basename(FLAGS.file_path)
+
+        pred = sess.run(prediction, feed_dict={x: b_image})
+        print(pred.shape)
+
+
         # save raw image, annotation, and prediction
         pred = pred.astype(np.uint8)
-        b_anno = b_anno.astype(np.uint8)
+
         pred_color = color_gray(pred[0, :, :])
-        b_anno_color = color_gray(b_anno[0, :, :])
+
 
         b_image_0 = b_image_0.astype(np.uint8)
 
         img = Image.fromarray(b_image_0[0])
-        anno = Image.fromarray(b_anno_color)
+
         pred = Image.fromarray(pred_color)
 
         basename = b_filename.split('.')[0]
@@ -117,10 +128,14 @@ with tf.Session() as sess:
         if not os.path.exists(FLAGS.saved_prediction):
             os.mkdir(FLAGS.saved_prediction)
         img.save(os.path.join(FLAGS.saved_prediction, basename + '.png'))
-        anno.save(os.path.join(FLAGS.saved_prediction, basename + '_anno.png'))
+
         pred.save(os.path.join(FLAGS.saved_prediction, basename + '_pred.png'))
 
-        print("%s.png: prediction saved in %s, mIoU value is %.2f" % (basename, FLAGS.saved_prediction, mIoU_val))
-        print(IoU_val)
+        print("%s.png: prediction saved in %s" % (basename, FLAGS.saved_prediction))
 
-print(datetime.datetime.now().strftime("%Y.%m.%d-%H:%M:%S"))
+
+# python predict.py --prediction_on test
+# python predict.py --prediction_on val
+# python predict.py --prediction_on train
+
+# python predict.py --file_path /Volumes/Samsung_T5/datasets/Cityscape/leftImg8bit_trainvaltest/leftImg8bit/test/berlin/berlin_000270_000019_leftImg8bit.png

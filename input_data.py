@@ -189,6 +189,31 @@ def read_train_data(rgb_mean, crop_height, crop_width, classes, ignore_label, sc
 
     return train_data
 
+def read_trainval_data(rgb_mean, crop_height, crop_width, classes, ignore_label, scales, Shuffle=True):
+    train_f = open(IMG_TRAIN_LIST)
+    train_lines = train_f.readlines()
+    train_img_filenames = [line.strip() for line in train_lines]
+
+    train_anno_filenames = [filename.replace(CITYSCAPE_IMG_DIR, CITYSCAPE_ANNO_DIR) for filename in train_img_filenames]
+    train_anno_filenames = [filename.replace('_leftImg8bit.png', '_gtFine_labelTrainIds.png') for filename in train_anno_filenames]
+
+    val_f = open(IMG_VAL_LIST)
+    val_lines = val_f.readlines()
+    val_img_filenames = [line.strip() for line in val_lines]
+
+
+    val_anno_filenames = [filename.replace(CITYSCAPE_IMG_DIR, CITYSCAPE_ANNO_DIR) for filename in val_img_filenames]
+    val_anno_filenames = [filename.replace('_leftImg8bit.png', '_gtFine_labelTrainIds.png') for filename in val_anno_filenames]
+
+    img_filenames = train_img_filenames + val_img_filenames
+    anno_filenames = train_anno_filenames +  val_anno_filenames
+
+    if Shuffle:
+        img_filenames, anno_filenames = shuffle(img_filenames, anno_filenames)
+
+    trainval_data = Dataset(img_filenames, anno_filenames, rgb_mean, crop_height, crop_width, classes, ignore_label, scales)
+
+    return trainval_data
 
 
 def read_val_data(rgb_mean, crop_height, crop_width, classes, ignore_label, scales, Shuffle=True):

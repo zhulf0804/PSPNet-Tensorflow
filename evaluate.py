@@ -8,6 +8,8 @@ import os
 from PIL import Image
 import cv2
 import datetime
+import argparse
+import glob
 import matplotlib.pyplot as plt
 
 import model.pspnet as PSPNet
@@ -17,9 +19,7 @@ import utils.utils as Utils
 flags = tf.app.flags
 FLAGS = flags.FLAGS
 
-SCALES = input_data.SCALES
-FLIPPED = True
-
+CITYSCAPE_ANNO_DIR = input_data.CITYSCAPE_ANNO_DIR
 
 # for dataset
 flags.DEFINE_integer('height', 1024, 'The height of raw image.')
@@ -29,13 +29,14 @@ flags.DEFINE_integer('classes', 19, 'The number of classes')
 flags.DEFINE_integer('ignore_label', 255, 'The ignore label value.')
 
 flags.DEFINE_integer('val_num', 500, 'the number of val set.')
-flags.DEFINE_integer('val_num', 1525, 'the number of test set.')
+flags.DEFINE_integer('test_num', 1525, 'the number of test set.')
+
+flags.DEFINE_string('dataset', 'val', 'which dataset to select to predict.(val or test).')
+
 
 flags.DEFINE_integer('crop_height', 1024, 'The height of cropped image used for training.')
 flags.DEFINE_integer('crop_width', 2048, 'The width of cropped image used for training.')
 flags.DEFINE_integer('channels', 3, 'The channels of input image.')
-flags.DEFINE_integer('ignore_label', 255, 'The ignore label value.')
-flags.DEFINE_integer('classes', 19, 'The ignore label value.')
 #flags.DEFINE_multi_float('rgb_mean', [123.15,115.90,103.06], 'RGB mean value of ImageNet.')
 flags.DEFINE_multi_float('rgb_mean', [72.39239876,82.90891754,73.15835921], 'RGB mean value of ImageNet.')
 
@@ -55,6 +56,7 @@ flags.DEFINE_string('saved_prediction_val_color', './pred/val_color', 'Path to s
 flags.DEFINE_string('saved_prediction_val_gray', './pred/val_gray', 'Path to save val set gray predictions.')
 flags.DEFINE_string('saved_prediction_test_color', './pred/test_color', 'Path to save test set color predictions.')
 flags.DEFINE_string('saved_prediction_test_gray', './pred/test_gray', 'Path to save test set gray predictions.')
+flags.DEFINE_string('saved_submit_test_gray', './pred/submit_gray', 'Path to save test set gray submit version.')
 
 
 
@@ -101,19 +103,18 @@ with tf.name_scope('prediction_and_miou'):
 
 def get_val_predictions():
 
-    val_data = input_data.read_val_data()
 
     with tf.Session() as sess:
         sess.run(tf.local_variables_initializer())
         sess.run(tf.global_variables_initializer())
         saver = tf.train.Saver()
 
-        saver.restore(sess, './checkpoint/deeplabv3plus.model-55000')
+        #saver.restore(sess, './checkpoint/deeplabv3plus.model-55000')
 
-        #ckpt = tf.train.get_checkpoint_state(saved_ckpt_path)
-        #if ckpt and ckpt.model_checkpoint_path:
-        #    saver.restore(sess, ckpt.model_checkpoint_path)
-        #    print("Model restored...")
+        ckpt = tf.train.get_checkpoint_state(FLAGS.saved_ckpt_path)
+        if ckpt and ckpt.model_checkpoint_path:
+            saver.restore(sess, ckpt.model_checkpoint_path)
+            print("Model restored...")
 
         print("predicting on val set...")
 
@@ -138,7 +139,7 @@ def get_val_predictions():
             b_image_0 = b_image_0.astype(np.uint8)
 
             pred_gray = Image.fromarray(pred[0])
-            pred_gray = map(lambda x: cityscapes_trainIds2labelIds[x], np.arry(pred_gray))
+            #pred_gray = map(lambda x: cityscapes_trainIds2labelIds[x], np.arry(pred_gray))
             img = Image.fromarray(b_image_0[0])
             anno = Image.fromarray(b_anno_color)
             pred = Image.fromarray(pred_color)
@@ -201,6 +202,10 @@ def get_test_predictions():
             pred_gray.save(os.path.join(FLAGS.saved_prediction_test_gray, basename + '.png'))
             pred_gray = map(lambda x: cityscapes_trainIds2labelIds[x], np.array(pred_gray))
 
+            if not os.path.exists(FLAGS.saved_submit_test_gray):
+                os.mkdir(FLAGS.saved_submit_test_gray)
+            pred_gray.save(os.path.join(FLAGS.saved_submit_test_gray, basename + '.png'))
+
             if not os.path.exists(FLAGS.saved_prediction_test_color):
                 os.mkdir(FLAGS.saved_prediction_test_color)
             img.save(os.path.join(FLAGS.saved_prediction_test_color, basename + '_raw.png'))
@@ -213,10 +218,14 @@ def get_val_mIoU():
 
     print("Start to get mIoU on val set...")
 
-    f = open(VAL_LIST)
-    lines = f.readlines()
-    annotation_files = [os.path.join(ANNOTATION_PATH, line.strip() + '.png') for line in lines]
-    prediction_files = [os.path.join(FLAGS.saved_prediction_val_gray, line.strip() + '.png') for line in lines]
+    #prediction_files = glob.glob(os.path.join(FLAGS.saved_prediction_val_gray, '*.png'))
+
+
+    #f = open(VAL_LIST)
+    #lines = f.readlines()
+    annotation_files = glob.glob(os.path.join(CITYSCAPE_ANNO_DIR, 'val/*/*_gtFine_labelTrainIds.png'))
+    prediction_files = [os.path.join(FLAGS.saved_prediction_val_gray, os.path.join(os.path.basename(filename))) for filename in annotation_files]
+    prediction_files = [filename.replace('_gtFine_labelTrainIds.png', '_leftImg8bit.png') for filename in prediction_files]
 
 
     for i, annotation_file in enumerate(annotation_files):
@@ -246,9 +255,11 @@ def get_val_mIoU():
     print(IoU)
 
 if __name__ == '__main__':
-    #get_val_predictions()
-    #get_val_mIoU()
 
-    get_test_predictions()
+    if FLAGS.dataset == 'val':
+        get_val_predictions()
+        get_val_mIoU()
+    elif FLAGS.dataset == 'test':
+        get_test_predictions()
 
 

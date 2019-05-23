@@ -8,9 +8,10 @@ import glob
 import numpy as np
 from PIL import Image
 from collections import namedtuple
+import cv2
 
 # Reference https://github.com/mcordts/cityscapesScripts/blob/master/cityscapesscripts/helpers/labels.py
-# Reference to https://github.com/fregu856/segmentation/blob/master/preprocess_data.py
+
 
 #--------------------------------------------------------------------------------
 # Definitions
@@ -103,25 +104,3 @@ labels = [
     Label(  'license plate'        , -1 ,       -1 , 'vehicle'         , 7       , False        , True         , (  0,  0,142) ),
 ]
 
-
-# create a function mapping id to trainId:
-# id_to_trainId = {label.id: label.trainId for label in labels}
-id_to_trainId = {label.id: label.trainId for label in labels}
-id_to_trainId_map_func = np.vectorize(id_to_trainId.get)
-
-# trainId2Color
-trainId2Color   = { label.trainId : label.color for label in reversed(labels) }
-
-def get_name():
-    names = []
-    for i in range(19):
-        for label in labels:
-
-            if int(label.trainId) == i:
-                names.append(label.name)
-                continue
-    return names
-
-if __name__ == '__main__':
-    names = get_name()
-    print(names)
