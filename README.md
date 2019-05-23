@@ -120,3 +120,9 @@ A PSPNet([Pyramid Scene Parsing Network](http://openaccess.thecvf.com/content_cv
 
 ![](./test_results/lr.png)
 
+
+## Reference
+
++ [https://github.com/mcordts/cityscapesScripts](https://github.com/mcordts/cityscapesScripts)
++ [https://github.com/tensorflow/models/tree/master/research/deeplab](https://github.com/tensorflow/models/tree/master/research/deeplab)
++ [https://github.com/wutianyiRosun/CGNet](https://github.com/wutianyiRosun/CGNet)
