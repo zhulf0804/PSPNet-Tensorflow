@@ -146,6 +146,7 @@ def get_val_predictions():
 
             if not os.path.exists(FLAGS.saved_prediction_val_gray):
                 os.mkdir(FLAGS.saved_prediction_val_gray)
+
             pred_gray.save(os.path.join(FLAGS.saved_prediction_val_gray, basename + '.png'))
 
             if not os.path.exists(FLAGS.saved_prediction_val_color):
@@ -204,6 +205,12 @@ def get_test_predictions():
 
             if not os.path.exists(FLAGS.saved_submit_test_gray):
                 os.mkdir(FLAGS.saved_submit_test_gray)
+
+
+            # pred_gray = np.array(pred_gray) # for python 2.x
+            pred_gray = np.array(list(pred_gray)) # for python 3.x
+            pred_gray = Image.fromarray(pred_gray)
+
             pred_gray.save(os.path.join(FLAGS.saved_submit_test_gray, basename + '.png'))
 
             if not os.path.exists(FLAGS.saved_prediction_test_color):

@@ -49,7 +49,7 @@ A PSPNet([Pyramid Scene Parsing Network](http://openaccess.thecvf.com/content_cv
     
 + Download the pretrained model
     + download pretrained resnet101 weight from [http://download.tensorflow.org/models/resnet_v2_101_2017_04_14.tar.gz](http://download.tensorflow.org/models/resnet_v2_101_2017_04_14.tar.gz)
-    + download the trained weight from [here](https://pan.baidu.com/s/19emHaT8PMoEcDBJoWGYcFQ) **if you want to inference and evaluate the model**.
+    + download the trained weight from [here](https://pan.baidu.com/s/16xW1Ja_PnGVOiy6F0OHhQw) **if you want to inference and evaluate the model**.
     
 
 ## Exec
@@ -64,7 +64,7 @@ A PSPNet([Pyramid Scene Parsing Network](http://openaccess.thecvf.com/content_cv
      
         > python train.py
 
-+ Inference [Use your trained model or download checkpoint [here](https://pan.baidu.com/s/19emHaT8PMoEcDBJoWGYcFQ)]
++ Inference [Use your trained model or download checkpoint [here](https://pan.baidu.com/s/16xW1Ja_PnGVOiy6F0OHhQw)]
 
     + Inference an image in test set randomly
         
@@ -78,20 +78,20 @@ A PSPNet([Pyramid Scene Parsing Network](http://openaccess.thecvf.com/content_cv
     
         > python predict.py --prediction_on train
     
-    + Inference an specified image by file path
+    + Inference an specified image by file path(**or your own image path**)
     
         > python predict.py --file_path /Volumes/Samsung_T5/datasets/Cityscape/leftImg8bit_trainvaltest/leftImg8bit/test/berlin/berlin_000270_000019_leftImg8bit.png
         
     
-+ Evaluation [Use your trained model or download checkpoint [here](https://pan.baidu.com/s/19emHaT8PMoEcDBJoWGYcFQ)]
++ Evaluation [Use your trained model or download checkpoint [here](https://pan.baidu.com/s/16xW1Ja_PnGVOiy6F0OHhQw)]
 
     + On test set
     
-        > python evaluate.py --dataset == 'test'
+        > python evaluate.py --dataset test
         
     + On val set
     
-        > python evaluate.py --dataset == 'val'
+        > python evaluate.py --dataset val
         
 
 
@@ -100,11 +100,17 @@ A PSPNet([Pyramid Scene Parsing Network](http://openaccess.thecvf.com/content_cv
 | Desc | Repo(%) | Repo(%) | Paper(%) |
 | :---:| :---: | :----: | :----: |
 |Train set| train | train+val | train+val |
-|mIoU| **73.5** | TBD | 78.4 |
+|mIoU| **73.5** | **74.3** | 78.4 |
 
 #### Prediction images
 
 ![](./test_results/predictions.png)
+
+Pictures in test set.
+
+![](./test_results/zgc.png)
+
+ZhongGuancun Road in Beijing.
 
 ## Tensorboard
 

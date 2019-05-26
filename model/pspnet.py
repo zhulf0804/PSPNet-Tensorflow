@@ -49,7 +49,6 @@ def pyramid_pooling(input, is_training):
     with tf.contrib.slim.arg_scope(resnet_v2.resnet_arg_scope(batch_norm_decay=_BATCH_NORM_DECAY)):
         with tf.name_scope("pyramid_pooling"):
             input_shape = input.get_shape().as_list()
-
             num_output_features = input_shape[-1] // LEVEL_SIZE
             with tf.name_scope("pool_1"):
                 pool_bin_1 = tf.nn.avg_pool(input, [1, input_shape[1], input_shape[2], 1],
